@@ -1,5 +1,5 @@
 /*
-Copyright 2017 The Kubernetes Authors.
+Copyright 2021 The Kubernetes Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package v1alpha1
+package v1alpha2
 
 import (
 	v1 "k8s.io/api/core/v1"
@@ -26,8 +26,8 @@ import (
 type DeschedulerPolicy struct {
 	metav1.TypeMeta `json:",inline"`
 
-	// Strategies
-	Strategies StrategyList `json:"strategies,omitempty"`
+	// Profiles
+	Profiles []DeschedulerProfile `json:"profiles,omitempty"`
 
 	// NodeSelector for a set of nodes to operate over
 	NodeSelector *string `json:"nodeSelector,omitempty"`
@@ -43,6 +43,17 @@ type DeschedulerPolicy struct {
 
 	// MaxNoOfPodsToEvictPerNode restricts maximum of pods to be evicted per node.
 	MaxNoOfPodsToEvictPerNode *int `json:"maxNoOfPodsToEvictPerNode,omitempty"`
+}
+
+type DeschedulerProfile struct {
+	// Name
+	Name string `json:"name,omitempty"`
+
+	// Enabled
+	Enabled *bool `json:"enabled,omitempty"`
+
+	// Strategies
+	Strategies StrategyList `json:"strategies,omitempty"`
 }
 
 type StrategyName string

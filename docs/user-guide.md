@@ -82,13 +82,15 @@ descheduler -v=3 --evict-local-storage-pods --policy-config-file=pod-life-time.y
 This policy configuration file ensures that pods created more than 7 days ago are evicted.
 ```
 ---
-apiVersion: "descheduler/v1alpha1"
+apiVersion: "descheduler/v1alpha2"
 kind: "DeschedulerPolicy"
-strategies:
-  "PodLifeTime":
-    enabled: true
-    params:
-      maxPodLifeTimeSeconds: 604800 # pods run for a maximum of 7 days
+profiles:
+  - name : "default"
+    strategies:
+      "PodLifeTime":
+        enabled: true
+        params:
+          maxPodLifeTimeSeconds: 604800 # pods run for a maximum of 7 days
 ```
 
 ### Balance Cluster By Node Memory Utilization
@@ -101,17 +103,19 @@ Using `LowNodeUtilization`, descheduler will rebalance the cluster based on memo
 from nodes with memory utilization over 70% to nodes with memory utilization below 20%.
 
 ```
-apiVersion: "descheduler/v1alpha1"
+apiVersion: "descheduler/v1alpha2"
 kind: "DeschedulerPolicy"
-strategies:
-  "LowNodeUtilization":
-    enabled: true
-    params:
-      nodeResourceUtilizationThresholds:
-        thresholds:
-          "memory": 20
-        targetThresholds:
-          "memory": 70
+profiles:
+  - name : "default"
+    strategies:
+      "LowNodeUtilization":
+        enabled: true
+        params:
+          nodeResourceUtilizationThresholds:
+            thresholds:
+              "memory": 20
+            targetThresholds:
+              "memory": 70
 ```
 
 #### Balance low utilization nodes
@@ -122,13 +126,15 @@ The evicted pods will be compacted into minimal set of nodes.
 ```
 apiVersion: "descheduler/v1alpha1"
 kind: "DeschedulerPolicy"
-strategies:
-  "HighNodeUtilization":
-    enabled: true
-    params:
-      nodeResourceUtilizationThresholds:
-        thresholds:
-          "memory": 20
+profiles:
+  - name : "default"
+    strategies:
+      "HighNodeUtilization":
+        enabled: true
+        params:
+          nodeResourceUtilizationThresholds:
+            thresholds:
+              "memory": 20
 ```
 
 ### Autoheal Node Problems

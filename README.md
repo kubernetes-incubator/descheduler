@@ -32,7 +32,7 @@ Table of Contents
   - [Install Using Helm](#install-using-helm)
   - [Install Using Kustomize](#install-using-kustomize)
 - [User Guide](#user-guide)
-- [Policy and Strategies](#policy-and-strategies)
+- [Policy - Profile and Strategies](#policy---profile-and-strategies)
   - [RemoveDuplicates](#removeduplicates)
   - [LowNodeUtilization](#lownodeutilization)
   - [HighNodeUtilization](#highnodeutilization)
@@ -42,6 +42,7 @@ Table of Contents
   - [RemovePodsViolatingTopologySpreadConstraint](#removepodsviolatingtopologyspreadconstraint)
   - [RemovePodsHavingTooManyRestarts](#removepodshavingtoomanyrestarts)
   - [PodLifeTime](#podlifetime)
+  - [API versions](#api-versions)
 - [Filter Pods](#filter-pods)
   - [Namespace filtering](#namespace-filtering)
   - [Priority filtering](#priority-filtering)
@@ -119,9 +120,8 @@ kustomize build 'github.com/kubernetes-sigs/descheduler/kubernetes/deployment?re
 
 See the [user guide](docs/user-guide.md) in the `/docs` directory.
 
-## Policy and Strategies
-
-Descheduler's policy is configurable and includes strategies that can be enabled or disabled.
+## Policy - Profile and Strategies
+Descheduler's policy is configurable through profiles and strategies. Each profile defines strategies with configurable parameters that determine how descheduler will evict pods.
 Nine strategies
 1. `RemoveDuplicates`
 2. `LowNodeUtilization`
@@ -132,15 +132,37 @@ Nine strategies
 7. `RemovePodsViolatingTopologySpreadConstraint`
 8. `RemovePodsHavingTooManyRestarts`
 9. `PodLifeTime`  
-are currently implemented. As part of the policy, the
-parameters associated with the strategies can be configured too. By default, all strategies are enabled.
+
+are currently implemented. Each strategy can be defined only once in a profile. The same strategy with different parameters can be defined in another profile.   
+Profiles can be enabled or disabled. Similarly, each strategy under a profile can be enabled or disabled. 
+By default, all profiles and strategies are enabled.
+
+**Example:**
+```yaml
+apiVersion: "descheduler/v1alpha2"
+kind: "DeschedulerPolicy"
+profiles:
+  - name : "profile-1"
+    strategies:
+      "PodLifeTime":
+         params:
+           podLifeTime:
+             maxPodLifeTimeSeconds: 43200
+  - name : "profile-2"
+    enabled: false
+    strategies:
+      "PodLifeTime":
+         params:
+           podLifeTime:
+             maxPodLifeTimeSeconds: 86400
+```
 
 The following diagram provides a visualization of most of the strategies to help
 categorize how strategies fit together.
 
 ![Strategies diagram](strategies_diagram.png)
 
-The policy also includes common configuration for all the strategies:
+The policy also includes common configuration for all the profiles:
 - `nodeSelector` - limiting the nodes which are processed
 - `evictLocalStoragePods` - allows eviction of pods with local storage
 - `evictSystemCriticalPods` - [Warning: Will evict Kubernetes system pods] allows eviction of pods with any priority, including system pods like kube-dns
@@ -148,7 +170,7 @@ The policy also includes common configuration for all the strategies:
 - `maxNoOfPodsToEvictPerNode` - maximum number of pods evicted from each node (summed through all strategies)
 
 ```yaml
-apiVersion: "descheduler/v1alpha1"
+apiVersion: "descheduler/v1alpha2"
 kind: "DeschedulerPolicy"
 nodeSelector: prod=dev
 evictLocalStoragePods: true
@@ -185,15 +207,17 @@ should include `ReplicaSet` to have pods created by Deployments excluded.
 
 **Example:**
 ```yaml
-apiVersion: "descheduler/v1alpha1"
+apiVersion: "descheduler/v1alpha2"
 kind: "DeschedulerPolicy"
-strategies:
-  "RemoveDuplicates":
-     enabled: true
-     params:
-       removeDuplicates:
-         excludeOwnerKinds:
-         - "ReplicaSet"
+profiles:
+  - name : "default"
+    strategies:
+      "RemoveDuplicates":
+         enabled: true
+         params:
+           removeDuplicates:
+             excludeOwnerKinds:
+             - "ReplicaSet"
 ```
 
 ### LowNodeUtilization
@@ -234,21 +258,23 @@ strategy evicts pods from `overutilized nodes` (those with usage above `targetTh
 **Example:**
 
 ```yaml
-apiVersion: "descheduler/v1alpha1"
+apiVersion: "descheduler/v1alpha2"
 kind: "DeschedulerPolicy"
-strategies:
-  "LowNodeUtilization":
-     enabled: true
-     params:
-       nodeResourceUtilizationThresholds:
-         thresholds:
-           "cpu" : 20
-           "memory": 20
-           "pods": 20
-         targetThresholds:
-           "cpu" : 50
-           "memory": 50
-           "pods": 50
+profiles:
+  - name : "default"
+    strategies:
+      "LowNodeUtilization":
+         enabled: true
+         params:
+           nodeResourceUtilizationThresholds:
+             thresholds:
+               "cpu" : 20
+               "memory": 20
+               "pods": 20
+             targetThresholds:
+               "cpu" : 50
+               "memory": 50
+               "pods": 50
 ```
 
 Policy should pass the following validation checks:
@@ -300,15 +326,17 @@ The strategy will abort if any number of `underutilized nodes` or `appropriately
 ```yaml
 apiVersion: "descheduler/v1alpha1"
 kind: "DeschedulerPolicy"
-strategies:
-  "HighNodeUtilization":
-     enabled: true
-     params:
-       nodeResourceUtilizationThresholds:
-         thresholds:
-           "cpu" : 20
-           "memory": 20
-           "pods": 20
+profiles:
+  - name : "default"
+    strategies:
+      "HighNodeUtilization":
+         enabled: true
+         params:
+           nodeResourceUtilizationThresholds:
+             thresholds:
+               "cpu" : 20
+               "memory": 20
+               "pods": 20
 ```
 
 Policy should pass the following validation checks:
@@ -343,11 +371,13 @@ node.
 **Example:**
 
 ```yaml
-apiVersion: "descheduler/v1alpha1"
+apiVersion: "descheduler/v1alpha2"
 kind: "DeschedulerPolicy"
-strategies:
-  "RemovePodsViolatingInterPodAntiAffinity":
-     enabled: true
+profiles:
+  - name : "default"
+    strategies:
+      "RemovePodsViolatingInterPodAntiAffinity":
+         enabled: true
 ```
 
 ### RemovePodsViolatingNodeAffinity
@@ -382,14 +412,16 @@ podA gets evicted from nodeA.
 **Example:**
 
 ```yaml
-apiVersion: "descheduler/v1alpha1"
+apiVersion: "descheduler/v1alpha2"
 kind: "DeschedulerPolicy"
-strategies:
-  "RemovePodsViolatingNodeAffinity":
-    enabled: true
-    params:
-      nodeAffinityType:
-      - "requiredDuringSchedulingIgnoredDuringExecution"
+profiles:
+  - name : "default"
+    strategies:
+      "RemovePodsViolatingNodeAffinity":
+        enabled: true
+        params:
+          nodeAffinityType:
+          - "requiredDuringSchedulingIgnoredDuringExecution"
 ```
 
 ### RemovePodsViolatingNodeTaints
@@ -412,11 +444,13 @@ and will be evicted.
 **Example:**
 
 ````yaml
-apiVersion: "descheduler/v1alpha1"
+apiVersion: "descheduler/v1alpha2"
 kind: "DeschedulerPolicy"
-strategies:
-  "RemovePodsViolatingNodeTaints":
-    enabled: true
+profiles:
+  - name : "default"
+    strategies:
+      "RemovePodsViolatingNodeTaints":
+        enabled: true
 ````
 
 ### RemovePodsViolatingTopologySpreadConstraint
@@ -444,13 +478,15 @@ Strategy parameter `labelSelector` is not utilized when balancing topology domai
 **Example:**
 
 ```yaml
-apiVersion: "descheduler/v1alpha1"
+apiVersion: "descheduler/v1alpha2"
 kind: "DeschedulerPolicy"
-strategies:
-  "RemovePodsViolatingTopologySpreadConstraint":
-     enabled: true
-     params:
-       includeSoftConstraints: false
+profiles:
+  - name : "default"
+    strategies:
+      "RemovePodsViolatingTopologySpreadConstraint":
+         enabled: true
+         params:
+           includeSoftConstraints: false
 ```
 
 
@@ -476,15 +512,17 @@ which determines whether init container restarts should be factored into that ca
 **Example:**
 
 ```yaml
-apiVersion: "descheduler/v1alpha1"
+apiVersion: "descheduler/v1alpha2"
 kind: "DeschedulerPolicy"
-strategies:
-  "RemovePodsHavingTooManyRestarts":
-     enabled: true
-     params:
-       podsHavingTooManyRestarts:
-         podRestartThreshold: 100
-         includingInitContainers: true
+profiles:
+  - name : "default"
+    strategies:
+      "RemovePodsHavingTooManyRestarts":
+         enabled: true
+         params:
+           podsHavingTooManyRestarts:
+             podRestartThreshold: 100
+             includingInitContainers: true
 ```
 
 ### PodLifeTime
@@ -508,6 +546,28 @@ to `Running` and `Pending`.
 **Example:**
 
 ```yaml
+apiVersion: "descheduler/v1alpha2"
+kind: "DeschedulerPolicy"
+profiles:
+  - name : "default"
+    strategies:
+      "PodLifeTime":
+         enabled: true
+         params:
+           podLifeTime:
+             maxPodLifeTimeSeconds: 86400
+             podStatusPhases:
+             - "Pending"
+```
+
+### API versions
+
+The current active version of the descheduler API is `v1alpha2` and `v1alpha1` is being deprecated.
+To provide backward compatibility, policies defined under `v1alpha1` will be automatically converted to `v1alpha2` by adding a `default` profile.
+
+**Example:**
+
+```yaml
 apiVersion: "descheduler/v1alpha1"
 kind: "DeschedulerPolicy"
 strategies:
@@ -518,6 +578,23 @@ strategies:
          maxPodLifeTimeSeconds: 86400
          podStatusPhases:
          - "Pending"
+```
+
+is converted to `v1alpha2` as
+
+```yaml
+apiVersion: "descheduler/v1alpha2"
+kind: "DeschedulerPolicy"
+profiles:
+  - name : "default"
+    strategies:
+      "PodLifeTime":
+         enabled: true
+         params:
+           podLifeTime:
+             maxPodLifeTimeSeconds: 86400
+             podStatusPhases:
+             - "Pending"
 ```
 
 ## Filter Pods
@@ -536,25 +613,27 @@ The following strategies accept a `namespaces` parameter which allows to specify
 For example:
 
 ```yaml
-apiVersion: "descheduler/v1alpha1"
+apiVersion: "descheduler/v1alpha2"
 kind: "DeschedulerPolicy"
-strategies:
-  "PodLifeTime":
-     enabled: true
-     params:
-        podLifeTime:
-          maxPodLifeTimeSeconds: 86400
-        namespaces:
-          include:
-          - "namespace1"
-          - "namespace2"
+profiles:
+  - name : "default"
+    strategies:
+      "PodLifeTime":
+         enabled: true
+         params:
+            podLifeTime:
+              maxPodLifeTimeSeconds: 86400
+            namespaces:
+              include:
+              - "namespace1"
+              - "namespace2"
 ```
 
 In the examples `PodLifeTime` gets executed only over `namespace1` and `namespace2`.
 The similar holds for `exclude` field:
 
 ```yaml
-apiVersion: "descheduler/v1alpha1"
+apiVersion: "descheduler/v1alpha2"
 kind: "DeschedulerPolicy"
 strategies:
   "PodLifeTime":
@@ -585,28 +664,32 @@ E.g.
 
 Setting `thresholdPriority`
 ```yaml
-apiVersion: "descheduler/v1alpha1"
+apiVersion: "descheduler/v1alpha2"
 kind: "DeschedulerPolicy"
-strategies:
-  "PodLifeTime":
-     enabled: true
-     params:
-        podLifeTime:
-          maxPodLifeTimeSeconds: 86400
-        thresholdPriority: 10000
+profiles:
+  - name : "default"
+    strategies:
+      "PodLifeTime":
+         enabled: true
+         params:
+            podLifeTime:
+              maxPodLifeTimeSeconds: 86400
+            thresholdPriority: 10000
 ```
 
 Setting `thresholdPriorityClassName`
 ```yaml
-apiVersion: "descheduler/v1alpha1"
+apiVersion: "descheduler/v1alpha2"
 kind: "DeschedulerPolicy"
-strategies:
-  "PodLifeTime":
-     enabled: true
-     params:
-        podLifeTime:
-          maxPodLifeTimeSeconds: 86400
-        thresholdPriorityClassName: "priorityclass1"
+profiles:
+  - name : "default"
+    strategies:
+      "PodLifeTime":
+         enabled: true
+         params:
+            podLifeTime:
+              maxPodLifeTimeSeconds: 86400
+            thresholdPriorityClassName: "priorityclass1"
 ```
 
 Note that you can't configure both `thresholdPriority` and `thresholdPriorityClassName`, if the given priority class
@@ -629,20 +712,22 @@ This allows running strategies among pods the descheduler is interested in.
 For example:
 
 ```yaml
-apiVersion: "descheduler/v1alpha1"
+apiVersion: "descheduler/v1alpha2"
 kind: "DeschedulerPolicy"
-strategies:
-  "PodLifeTime":
-    enabled: true
-    params:
-      podLifeTime:
-        maxPodLifeTimeSeconds: 86400
-      labelSelector:
-        matchLabels:
-          component: redis
-        matchExpressions:
-          - {key: tier, operator: In, values: [cache]}
-          - {key: environment, operator: NotIn, values: [dev]}
+profiles:
+  - name : "default"
+    strategies:
+      "PodLifeTime":
+        enabled: true
+        params:
+          podLifeTime:
+            maxPodLifeTimeSeconds: 86400
+          labelSelector:
+            matchLabels:
+              component: redis
+            matchExpressions:
+              - {key: tier, operator: In, values: [cache]}
+              - {key: environment, operator: NotIn, values: [dev]}
 ```
 
 
@@ -669,20 +754,22 @@ E.g.
 ```yaml
 apiVersion: "descheduler/v1alpha1"
 kind: "DeschedulerPolicy"
-strategies:
-  "LowNodeUtilization":
-     enabled: true
-     params:
-       nodeResourceUtilizationThresholds:
-         thresholds:
-           "cpu" : 20
-           "memory": 20
-           "pods": 20
-         targetThresholds:
-           "cpu" : 50
-           "memory": 50
-           "pods": 50
-        nodeFit: true
+profiles:
+  - name : "default"
+    strategies:
+      "LowNodeUtilization":
+         enabled: true
+         params:
+           nodeResourceUtilizationThresholds:
+             thresholds:
+               "cpu" : 20
+               "memory": 20
+               "pods": 20
+             targetThresholds:
+               "cpu" : 50
+               "memory": 50
+               "pods": 50
+            nodeFit: true
 ```
 
 Note that node fit filtering references the current pod spec, and not that of it's owner.
